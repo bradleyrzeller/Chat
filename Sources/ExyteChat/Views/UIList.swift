@@ -650,14 +650,19 @@ extension UIList {
 
 actor UpdateQueue {
     private var isProcessing = false
+    private var pendingWork: [@Sendable () async -> Void] = []
 
     func enqueue(_ work: @escaping @Sendable () async -> Void) async {
-        while isProcessing {
-            await Task.yield() // Wait for previous task to finish
-        }
+        pendingWork.append(work)
+
+        guard !isProcessing else { return }
 
         isProcessing = true
-        await work()
-        isProcessing = false
+        defer { isProcessing = false }
+
+        while !pendingWork.isEmpty {
+            let nextWork = pendingWork.removeFirst()
+            await nextWork()
+        }
     }
 }
